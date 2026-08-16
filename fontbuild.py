@@ -370,8 +370,27 @@ def rename_font(font_bytes, family_name, extra_copyright_note=None):
 
 
 def to_woff2(font_bytes):
-    font = TTFont(io.BytesIO(font_bytes))
-    font.flavor = "woff2"
-    out = io.BytesIO()
-    font.save(out)
-    return out.getvalue()
+    """fontToolsのwoff2書き出しはbrotliのデフォルト品質(11=最高/最遅)を使うため、
+    6MB級のフォントだと圧縮だけで15秒以上かかる。品質9に落とすと1秒程度になり、
+    ファイルサイズは1割程度大きくなるだけで済む(実測: 68.4%→75.1%)。
+    fontTools側に品質を指定するオプションが無いため、brotli.compressを一時的に差し替える。
+    """
+    import brotli
+
+    from fontTools.ttLib import woff2 as woff2_module
+
+    original_compress = brotli.compress
+
+    def fast_compress(data, **kwargs):
+        kwargs["quality"] = 9
+        return original_compress(data, **kwargs)
+
+    woff2_module.brotli.compress = fast_compress
+    try:
+        font = TTFont(io.BytesIO(font_bytes))
+        font.flavor = "woff2"
+        out = io.BytesIO()
+        font.save(out)
+        return out.getvalue()
+    finally:
+        woff2_module.brotli.compress = original_compress
