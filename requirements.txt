@@ -1,0 +1,5 @@
+fastapi==0.117.1
+python-multipart==0.0.20
+fonttools==4.63.0
+pyclipper==1.4.0
+brotli==1.2.0
