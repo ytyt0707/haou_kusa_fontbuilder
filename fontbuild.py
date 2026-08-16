@@ -148,15 +148,25 @@ def advance_width_for(cp):
     return HALF_WIDTH_BOX_W if is_half_width_codepoint(cp) else FULL_WIDTH_BOX_W
 
 
+# 実際のフォント(Noto Sans CJK JP等)で調べたところ、半角ASCII(英数字・記号)は
+# 文字ごとに幅が違う(l と m 等)一方、半角カタカナは全角と同じく厳格な固定幅
+# (全角のちょうど半分)だった。可変幅にしていいのは半角ASCIIだけ。
+def is_proportional_width_codepoint(cp):
+    return 0x21 <= cp <= 0x7E
+
+
 VIEWBOX_RE = re.compile(r'viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"')
 
 
 def compute_advance_width(svg_content, cp):
-    """実際に描かれた内容の右端に合わせて可変のアドバンス幅を決める。
+    """半角ASCIIだけ、実際に描かれた内容の右端に合わせて可変のアドバンス幅を決める。
     左端の位置はそのまま(はみ出し方向は変えない)、右側だけ実際のインクの
     範囲に詰める/広げる。はみ出しエリア(SVGのviewBox)の右端を超えることはない。
-    描画が無い(空)場合は固定幅にフォールバックする。
+    全角と半角カタカナは、日本語組版の慣習通り常に固定幅のまま。
     """
+    if not is_proportional_width_codepoint(cp):
+        return advance_width_for(cp)
+
     max_x = None
     for d in PATH_D_RE.findall(svg_content):
         for cmd, args in parse_svg_path_d(d):
