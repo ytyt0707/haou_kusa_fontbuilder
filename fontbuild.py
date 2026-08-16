@@ -148,6 +148,38 @@ def advance_width_for(cp):
     return HALF_WIDTH_BOX_W if is_half_width_codepoint(cp) else FULL_WIDTH_BOX_W
 
 
+VIEWBOX_RE = re.compile(r'viewBox="(-?[\d.]+) (-?[\d.]+) ([\d.]+) ([\d.]+)"')
+
+
+def compute_advance_width(svg_content, cp):
+    """実際に描かれた内容の右端に合わせて可変のアドバンス幅を決める。
+    左端の位置はそのまま(はみ出し方向は変えない)、右側だけ実際のインクの
+    範囲に詰める/広げる。はみ出しエリア(SVGのviewBox)の右端を超えることはない。
+    描画が無い(空)場合は固定幅にフォールバックする。
+    """
+    max_x = None
+    for d in PATH_D_RE.findall(svg_content):
+        for cmd, args in parse_svg_path_d(d):
+            if cmd in ("M", "L"):
+                x = args[0]
+            elif cmd == "Q":
+                x = max(args[0], args[2])
+            else:
+                continue
+            if max_x is None or x > max_x:
+                max_x = x
+
+    if max_x is None:
+        return advance_width_for(cp)
+
+    m = VIEWBOX_RE.search(svg_content)
+    if m:
+        min_x, _min_y, w, _h = (float(v) for v in m.groups())
+        max_x = min(max_x, min_x + w)
+
+    return max(max_x, 1)
+
+
 def load_svg_entries_from_zip_bytes(zip_bytes):
     entries = []
     with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
@@ -249,7 +281,7 @@ def patch_font(base_font_bytes, svg_entries):
         glyf_table = font["glyf"]
         for cp, svg_content in sorted(svg_entries):
             try:
-                advance_width = round(advance_width_for(cp) * scale)
+                advance_width = round(compute_advance_width(svg_content, cp) * scale)
                 glyph = build_glyph_ttf(svg_content, scale)
             except Exception as e:
                 failed.append((cp, str(e)))
@@ -301,7 +333,7 @@ def patch_font(base_font_bytes, svg_entries):
             return cid
 
         for cp, svg_content in sorted(svg_entries):
-            advance_width = round(advance_width_for(cp) * scale)
+            advance_width = round(compute_advance_width(svg_content, cp) * scale)
             existing_name = cmap.get(cp)
 
             if existing_name:
