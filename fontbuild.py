@@ -223,7 +223,11 @@ def patch_font(base_font_bytes, svg_entries):
     """base_font_bytes(既存フォントのバイト列)に、svg_entries([(codepoint, svg_text), ...])の
     グリフを差し替え/追加したフォントのバイト列を返す。
     """
-    font = TTFont(io.BytesIO(base_font_bytes))
+    # recalcBBoxes=False: デフォルトだと保存の度に全グリフ(3万個)のアウトラインを
+    # 実際に描画してフォント全体のバウンディングボックスを再計算し直しており、
+    # これだけで20秒以上かかっていた(プロファイルして特定)。触ってないグリフの
+    # 範囲は元のフォントの値のままで実用上問題ないため、再計算自体を止める。
+    font = TTFont(io.BytesIO(base_font_bytes), recalcBBoxes=False)
     is_glyf = "glyf" in font
     is_cff = "CFF " in font
     if not is_glyf and not is_cff:
@@ -347,7 +351,7 @@ def patch_font(base_font_bytes, svg_entries):
 
 def rename_font(font_bytes, family_name, extra_copyright_note=None):
     """フォント内部の名前(Word等の一覧に出る名前)を差し替える。"""
-    font = TTFont(io.BytesIO(font_bytes))
+    font = TTFont(io.BytesIO(font_bytes), recalcBBoxes=False)
     name = font["name"]
     for rec in name.names:
         if rec.nameID == 1:
@@ -387,7 +391,7 @@ def to_woff2(font_bytes):
 
     woff2_module.brotli.compress = fast_compress
     try:
-        font = TTFont(io.BytesIO(font_bytes))
+        font = TTFont(io.BytesIO(font_bytes), recalcBBoxes=False)
         font.flavor = "woff2"
         out = io.BytesIO()
         font.save(out)
