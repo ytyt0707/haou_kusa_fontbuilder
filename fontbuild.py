@@ -140,7 +140,8 @@ def merge_strokes(path_ds):
 
 
 def is_half_width_codepoint(cp):
-    return 0x21 <= cp <= 0x7E
+    # src/lib/glyph-box.ts の isHalfWidthChar と同じ判定(半角ASCII + 半角カタカナ/句読点)
+    return (0x21 <= cp <= 0x7E) or (0xFF61 <= cp <= 0xFF9F)
 
 
 def advance_width_for(cp):
